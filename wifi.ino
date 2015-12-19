@@ -1,9 +1,9 @@
 /*
- *   Light Server - Lampe connectée
+ *   Light Server - Lampe connectée (relais pour piloter une ampoule + leds rgb)
  *
  *   Auteur: LACHERAY Benjamin
  *   Date de création: 05/12/2015
- *   Dernière modification: 11/12/2015
+ *   Dernière modification: 19/12/2015
  *
  */
 
@@ -19,23 +19,27 @@ SoftwareSerial EspSerial(10, 11);
 char buffer[BUFFER_SIZE];
 
 // Variable de notre réseau
-String NomduReseauWifi = "xxxx";
-String MotDePasse      = "yyyy";
+String NomduReseauWifi = "x";
+String MotDePasse      = "x";
 
 const int redPin = 9;
 const int greenPin = 5;
 const int bluePin = 6;
+const int relais = 12;
 
 // Variables que nous allons controler
 int redLvl = 120;
 int greenLvl = 120;
 int blueLvl = 120;
-int led = OFF;
+int light = OFF;
+int intensity = 0;  // intensité en %
 
 
 /* INITIALISATION */
 void setup()
 {
+  pinMode(relais, OUTPUT);
+  digitalWrite(relais, LOW);
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
   pinMode(bluePin, OUTPUT);
@@ -43,7 +47,7 @@ void setup()
   Serial.begin(9600);
   EspSerial.begin(115200);  // par défaut l'ESP communique à 115200 Bauds
   initESP();
-  led = ON;
+  intensity = 100;
   updateLed();
 }
 
@@ -113,7 +117,7 @@ void loop()
           printDebug(buffer, "off", ch_id);
         }    
 
-        led = OFF;
+        light = OFF;
         updateLed();
         sendEtat(ch_id);
 
@@ -123,7 +127,7 @@ void loop()
           printDebug(buffer, "on", ch_id);
         }
 
-        led = ON;
+        light = ON;
         updateLed();
         sendEtat(ch_id);
 
@@ -133,13 +137,15 @@ void loop()
           printDebug(buffer, "color", ch_id);
         }
 
-        int tmpRedLvl, tmpGreenLvl, tmpBlueLvl;
+        int tmpRedLvl, tmpGreenLvl, tmpBlueLvl, tmpIntensity;
         Serial.println(pb+5);
-        sscanf(pb+5, "c%d,%d,%d", &tmpRedLvl, &tmpGreenLvl, &tmpBlueLvl);
-        if (tmpRedLvl >= 0 && tmpRedLvl <= 255 && tmpGreenLvl >= 0 && tmpGreenLvl <= 255 && tmpBlueLvl >= 0 && tmpBlueLvl <= 255) {
+        sscanf(pb+5, "c%d,%d,%d,%d", &tmpRedLvl, &tmpGreenLvl, &tmpBlueLvl, &tmpIntensity);
+        if (tmpRedLvl >= 0 && tmpRedLvl <= 255 && tmpGreenLvl >= 0 && tmpGreenLvl <= 255 
+                  && tmpBlueLvl >= 0 && tmpBlueLvl <= 255 && tmpIntensity >= 0 && tmpIntensity <= 100) {
           redLvl = tmpRedLvl;
           greenLvl = tmpGreenLvl;
           blueLvl = tmpBlueLvl;
+          intensity = tmpIntensity;
           updateLed();
         }
 
@@ -203,7 +209,7 @@ void sendEtat(int ch_id) {
   Header += "Connection: close\r\n";  
    
   String Content;
-  Content = String(led);
+  Content = String(light);
 
   if (redLvl < 10) {
     Content += "00" + String(redLvl);
@@ -229,6 +235,14 @@ void sendEtat(int ch_id) {
     Content += String(blueLvl);
   }
    
+  if (intensity < 10) {
+    Content += "00" + String(intensity);
+  } else if (intensity < 100) {
+    Content += "0" + String(intensity);
+  } else {
+    Content += String(intensity);
+  }
+
   Header += "Content-Length: ";
   Header += (int)(Content.length());
   Header += "\r\n\r\n";
@@ -249,15 +263,9 @@ void sendEtat(int ch_id) {
 }
 
 void updateLed() {
-  if (led == ON) {
-    analogWrite(redPin, 255-redLvl);
-    analogWrite(greenPin, 255-greenLvl);
-    analogWrite(bluePin, 255-blueLvl);
-  } else {  // éteint tout
-    analogWrite(redPin, 255);
-    analogWrite(greenPin, 255);
-    analogWrite(bluePin, 255);
-  }
+    analogWrite(redPin, 255 - (float)intensity/100.0 * redLvl);
+    analogWrite(greenPin, 255 - (float)intensity/100.0 * greenLvl);
+    analogWrite(bluePin, 255 - (float)intensity/100.0 * blueLvl);
 }
 
 void printDebug(char* buffer, char* type, int ch_id) {
