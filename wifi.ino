@@ -211,37 +211,10 @@ void sendEtat(int ch_id) {
   String Content;
   Content = String(light);
 
-  if (redLvl < 10) {
-    Content += "00" + String(redLvl);
-  } else if (redLvl < 100) {
-    Content += "0" + String(redLvl);
-  } else {
-    Content += String(redLvl);
-  }
-
-  if (greenLvl < 10) {
-    Content += "00" + String(greenLvl);
-  } else if (greenLvl < 100) {
-    Content += "0" + String(greenLvl);
-  } else {
-    Content += String(greenLvl);
-  }
-
-  if (blueLvl < 10) {
-    Content += "00" + String(blueLvl);
-  } else if (blueLvl < 100) {
-    Content += "0" + String(blueLvl);
-  } else {
-    Content += String(blueLvl);
-  }
-   
-  if (intensity < 10) {
-    Content += "00" + String(intensity);
-  } else if (intensity < 100) {
-    Content += "0" + String(intensity);
-  } else {
-    Content += String(intensity);
-  }
+  Content += intTo3char(redLvl);
+  Content += intTo3char(greenLvl);
+  Content += intTo3char(blueLvl);
+  Content += intTo3char(intensity);
 
   Header += "Content-Length: ";
   Header += (int)(Content.length());
@@ -275,4 +248,14 @@ void printDebug(char* buffer, char* type, int ch_id) {
   Serial.print("get " + String(type) + " from ch :");
   Serial.println(ch_id);
   delay(100);
+}
+
+String intTo3char(int valeur) {
+  if (valeur < 10) {
+    return "00" + String(valeur);
+  } else if (valeur < 100) {
+    return "0" + String(valeur);
+  } else {
+    return String(valeur);
+  }
 }
