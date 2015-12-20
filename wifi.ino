@@ -1,9 +1,12 @@
 /*
- *   Light Server - Lampe connectée (relais pour piloter une ampoule + leds rgb)
+ *   Light Server - Lampe connectée
+ * 
+ *   Serveur pour Arduino et ESP8266, permet de contrôler une
+ *   lampe (via un relais) ainsi que des LEDs RGB.
  *
  *   Auteur: LACHERAY Benjamin
  *   Date de création: 05/12/2015
- *   Dernière modification: 19/12/2015
+ *   Dernière modification: 20/12/2015
  *
  */
 
@@ -19,43 +22,43 @@ SoftwareSerial EspSerial(10, 11);
 char buffer[BUFFER_SIZE];
 
 // Variable de notre réseau
-String NomduReseauWifi = "x";
-String MotDePasse      = "x";
+const String NomduReseauWifi = "x";
+const String MotDePasse      = "x";
 
 const int redPin = 9;
 const int greenPin = 5;
 const int bluePin = 6;
-const int relais = 12;
+const int lightPin = 12;  // relais
 
-// Variables que nous allons controler
-int redLvl = 120;
-int greenLvl = 120;
-int blueLvl = 120;
-int light = OFF;
-int intensity = 0;  // intensité en %
+// Variables que nous allons contrôler
+unsigned char redLvl = 0;
+unsigned char greenLvl = 120;
+unsigned char blueLvl = 0;
+unsigned char intensLvl = 0;      // intensité en %
+char lightState = OFF;
 
 
 /* INITIALISATION */
 void setup()
 {
-  pinMode(relais, OUTPUT);
-  digitalWrite(relais, LOW);
+  pinMode(lightPin, OUTPUT);
+  digitalWrite(lightPin, LOW);
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
   pinMode(bluePin, OUTPUT);
   updateLed();
-  Serial.begin(9600);
-  EspSerial.begin(115200);  // par défaut l'ESP communique à 115200 Bauds
+  if (DEBUG) Serial.begin(9600);
+  EspSerial.begin(115200);  // par défaut l'ESP communique à 115200 Bauds (dépend du modéle)
   initESP();
-  intensity = 100;
+  intensLvl = 100;
   updateLed();
 }
 
 
 /* Initialise l'ESP */
 void initESP()
-{  
-  Serial.println("Initialisation de l'ESP");
+{
+  if (DEBUG) Serial.println("Initialisation de l'ESP");
 
   /* Redémarre l'ESP */
   EspSerial.println("AT+RST");
@@ -86,7 +89,7 @@ void initESP()
   EspSerial.println("AT+CIPSERVER=1,80");
   receive(1000);
 
-  Serial.println("Initialisation terminée");
+  if (DEBUG) Serial.println("Initialisation terminée");
 }
 
 
@@ -113,39 +116,32 @@ void loop()
 
       if (strncmp(pb, "GET /off", 8) == 0)  // Le client veut éteindre la lampe
       {
-        if (DEBUG) {
-          printDebug(buffer, "off", ch_id);
-        }    
+        if (DEBUG) printDebug(buffer, "off", ch_id);
 
-        light = OFF;
-        updateLed();
+        lightState = OFF;
+        digitalWrite(lightPin, LOW);
         sendEtat(ch_id);
 
       } else if (strncmp(pb, "GET /on", 7) == 0) {  // Le client veut allumer la lampe
 
-        if (DEBUG) {
-          printDebug(buffer, "on", ch_id);
-        }
+        if (DEBUG) printDebug(buffer, "on", ch_id);
 
-        light = ON;
-        updateLed();
+        lightState = ON;
+        digitalWrite(lightPin, HIGH);
         sendEtat(ch_id);
 
       } else if (strncmp(pb, "GET /c", 6) == 0) {   // Changement de couleur des LED
 
-        if (DEBUG) {
-          printDebug(buffer, "color", ch_id);
-        }
+        if (DEBUG) printDebug(buffer, "color", ch_id);
 
         int tmpRedLvl, tmpGreenLvl, tmpBlueLvl, tmpIntensity;
-        Serial.println(pb+5);
         sscanf(pb+5, "c%d,%d,%d,%d", &tmpRedLvl, &tmpGreenLvl, &tmpBlueLvl, &tmpIntensity);
         if (tmpRedLvl >= 0 && tmpRedLvl <= 255 && tmpGreenLvl >= 0 && tmpGreenLvl <= 255 
                   && tmpBlueLvl >= 0 && tmpBlueLvl <= 255 && tmpIntensity >= 0 && tmpIntensity <= 100) {
           redLvl = tmpRedLvl;
           greenLvl = tmpGreenLvl;
           blueLvl = tmpBlueLvl;
-          intensity = tmpIntensity;
+          intensLvl = tmpIntensity;
           updateLed();
         }
 
@@ -153,9 +149,7 @@ void loop()
 
       } else if (strncmp(pb, "GET / ", 6) == 0) {   // Consultation sans changements du système
 
-        if (DEBUG) {
-          printDebug(buffer, "/", ch_id);
-        }
+        if (DEBUG) printDebug(buffer, "/", ch_id);
 
         sendEtat(ch_id);
       }
@@ -164,8 +158,42 @@ void loop()
   clearBuffer();
 }
 
+/* Envoie une réponse HTTP au client ch_id :
+   page web contenant l'état du système */
+void sendEtat(int ch_id) {
+  String Header;
+ 
+  Header =  "HTTP/1.1 200 OK\r\n";
+  Header += "Content-Type: text/html\r\n";
+  Header += "Connection: close\r\n";  
+   
+  String Content;
+  Content = String(lightState);
 
-/* Lit et affiche (si DEBUG) les messages envoyés par l'ESP */
+  Content += intTo3char(redLvl);
+  Content += intTo3char(greenLvl);
+  Content += intTo3char(blueLvl);
+  Content += intTo3char(intensLvl);
+
+  Header += "Content-Length: ";
+  Header += (int)(Content.length());
+  Header += "\r\n\r\n";
+   
+
+  EspSerial.print("AT+CIPSEND=");
+  EspSerial.print(ch_id);
+  EspSerial.print(",");
+  EspSerial.println(Header.length()+Content.length());
+  delay(20);
+
+  if (EspSerial.find(">")) {
+    EspSerial.print(Header);
+    EspSerial.print(Content);
+    delay(20);
+  }
+}
+
+/* Lit et affiche (si DEBUG) ou purge les messages envoyés par l'ESP */
 void receive(const int timeout)
 {
   long int time = millis();
@@ -188,7 +216,6 @@ void receive(const int timeout)
   }
 }
 
-
 void clearEspSerialBuffer() {
   while (EspSerial.available() > 0) {
     EspSerial.read();
@@ -201,53 +228,10 @@ void clearBuffer() {
   }
 }
 
-void sendEtat(int ch_id) {
-  String Header;
- 
-  Header =  "HTTP/1.1 200 OK\r\n";
-  Header += "Content-Type: text/html\r\n";
-  Header += "Connection: close\r\n";  
-   
-  String Content;
-  Content = String(light);
-
-  Content += intTo3char(redLvl);
-  Content += intTo3char(greenLvl);
-  Content += intTo3char(blueLvl);
-  Content += intTo3char(intensity);
-
-  Header += "Content-Length: ";
-  Header += (int)(Content.length());
-  Header += "\r\n\r\n";
-   
-
-  EspSerial.print("AT+CIPSEND=");
-  EspSerial.print(ch_id);
-  EspSerial.print(",");
-  EspSerial.println(Header.length()+Content.length());
-  delay(20);
-
-  if (EspSerial.find(">")) {
-    EspSerial.print(Header);
-    EspSerial.print(Content);
-    delay(10);
-  }
- 
-}
-
 void updateLed() {
-    analogWrite(redPin, 255 - (float)intensity/100.0 * redLvl);
-    analogWrite(greenPin, 255 - (float)intensity/100.0 * greenLvl);
-    analogWrite(bluePin, 255 - (float)intensity/100.0 * blueLvl);
-}
-
-void printDebug(char* buffer, char* type, int ch_id) {
-  Serial.print(millis());
-  Serial.print(" : ");
-  Serial.println(buffer);
-  Serial.print("get " + String(type) + " from ch :");
-  Serial.println(ch_id);
-  delay(100);
+    analogWrite(redPin, 255 - (float)intensLvl/100.0 * redLvl);
+    analogWrite(greenPin, 255 - (float)intensLvl/100.0 * greenLvl);
+    analogWrite(bluePin, 255 - (float)intensLvl/100.0 * blueLvl);
 }
 
 String intTo3char(int valeur) {
@@ -258,4 +242,13 @@ String intTo3char(int valeur) {
   } else {
     return String(valeur);
   }
+}
+
+void printDebug(char* buffer, char* type, int ch_id) {
+  Serial.print(millis());
+  Serial.print(" : ");
+  Serial.println(buffer);
+  Serial.print("get " + String(type) + " from ch :");
+  Serial.println(ch_id);
+  delay(100);
 }
