@@ -35,7 +35,7 @@ unsigned char redLvl = 0;
 unsigned char greenLvl = 120;
 unsigned char blueLvl = 0;
 unsigned char intensLvl = 0;      // intensité en %
-char lightState = OFF;
+unsigned char lightState = OFF;
 
 
 /* INITIALISATION */
@@ -118,16 +118,16 @@ void loop()
       {
         if (DEBUG) printDebug(buffer, "off", ch_id);
 
-        lightState = OFF;
-        digitalWrite(lightPin, LOW);
+        lightState = ON;
+        digitalWrite(lightPin, HIGH);
         sendEtat(ch_id);
 
       } else if (strncmp(pb, "GET /on", 7) == 0) {  // Le client veut allumer la lampe
 
         if (DEBUG) printDebug(buffer, "on", ch_id);
 
-        lightState = ON;
-        digitalWrite(lightPin, HIGH);
+        lightState = OFF;
+        digitalWrite(lightPin, LOW);
         sendEtat(ch_id);
 
       } else if (strncmp(pb, "GET /c", 6) == 0) {   // Changement de couleur des LED
