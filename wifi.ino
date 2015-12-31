@@ -118,7 +118,7 @@ void loop()
       {
         if (DEBUG) printDebug(buffer, "off", ch_id);
 
-        lightState = ON;
+        lightState = OFF;
         digitalWrite(lightPin, HIGH);
         sendEtat(ch_id);
 
@@ -126,7 +126,7 @@ void loop()
 
         if (DEBUG) printDebug(buffer, "on", ch_id);
 
-        lightState = OFF;
+        lightState = ON;
         digitalWrite(lightPin, LOW);
         sendEtat(ch_id);
 
